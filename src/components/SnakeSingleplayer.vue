@@ -1,7 +1,7 @@
 <template>
   <div>
-    <h1>Score: {{ player.score }}</h1>
-    <h3>Body: {{ player.body.length }}</h3>
+    <h1>Score: {{ gameWorld.player.score }}</h1>
+    <h3>Body: {{ gameWorld.player.body.length }}</h3>
     <h2>Frame count: {{ game.frameCount }}</h2>
     <h2>Delta time: {{ game.deltaTime }}</h2>
   </div>
@@ -9,6 +9,8 @@
 </template>
 
 <script>
+import GameWorld from "@/core/GameWorld.js"
+
 export default {
   data() {
     return {
@@ -19,34 +21,23 @@ export default {
         frameCount: 0,
         lastFrameTime: 0,
         deltaTime: 0,
-        debugPlayerGrow: false
       },
       cellSize: 50,
       grid: {
         x: 10,
         y: 10
       },
-      player: {
-        head: {
-          x: 0,
-          y: 0
-        },
-        direction: {
-          x: 1,
-          y: 0
-        },
-        score: 0,
-        body: [],
-        color: "green"
-      },
-      pickable: {
-        pos: {
-          x: 5,
-          y: 5,
-        },
-        color: "red"
+      gameWorld: null,
+      colors: {
+        pickable: "red",
+        player: "green",
+        background: "black",
+        gridLines: "gray"
       }
     }
+  },
+  created() {
+    this.gameWorld = new GameWorld(this.grid.x, this.grid.y)
   },
   mounted() {
     this.ctx = this.$refs.canvas.getContext("2d")
@@ -60,12 +51,16 @@ export default {
   },
   methods: {
     renderFrame() {
-      this.tick()
+      this.gameWorld.tick()
       this.game.frameCount += 1
       this.draw()
     },
     async render() {
       const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+      this.draw()
+      await sleep(this.game.frameDelay)
+
       while (true) {
         this.game.deltaTime = Date.now() - this.game.lastFrameTime
         if (!this.game.isPaused) {
@@ -76,14 +71,7 @@ export default {
       }
     },
     setDirection(x, y) {
-      // all checks is used to prevent moving in opposite direction
-
-      if (Math.abs(this.player.direction.x) != Math.abs(x)) {
-        this.player.direction.x = x
-      }
-      if (Math.abs(this.player.direction.y) != Math.abs(y)) {
-        this.player.direction.y = y
-      }
+      this.gameWorld.player.setDirection(x, y)
     },
     keydownHandler(event) {
       if (event.repeat) {
@@ -104,7 +92,7 @@ export default {
           this.setDirection(1, 0)
           break
         case "Space":
-          this.game.debugPlayerGrow = true
+          this.gameWorld.debug.shouldPlayerGrow = true
           break
         case "KeyP":
           this.game.isPaused = !this.game.isPaused
@@ -118,79 +106,6 @@ export default {
           break
       }
     },
-    tick() {
-      this.player.head.x += this.player.direction.x
-      this.player.head.y += this.player.direction.y
-
-      this.wallHandler()
-
-      // non reference type
-      const head = { x: this.player.head.x, y: this.player.head.y }
-
-      const shouldEatFood = this.player.head.x === this.pickable.pos.x && this.player.head.y === this.pickable.pos.y
-
-      if (shouldEatFood) {
-        this.spawnFood()
-      }
-
-      const shouldGrow = shouldEatFood || this.game.debugPlayerGrow
-
-      if (shouldGrow) {
-        this.player.score += 1
-      }
-
-      if (shouldGrow) {
-        this.player.body.unshift(head)
-      }
-      else {
-        if (this.player.body.length === 0) {
-          this.player.body.push(head)
-        }
-        else if (this.player.body.length === 1) {
-          this.player.body[0] = head
-        }
-        else if (this.player.body.length > 1) {
-          this.player.body.unshift(head)
-          this.player.body.splice(this.player.body.length - 1, 1)
-        }
-      }
-
-      for (let i = 1; i < this.player.body.length; i++) {
-        const { x, y } = this.player.body[i]
-        if (this.player.head.x === x && this.player.head.y === y) {
-          // on death
-          this.deathHandler()
-          break
-        }
-      }
-
-      if (this.game.debugPlayerGrow) {
-        this.game.debugPlayerGrow = false
-      }
-    },
-    wallHandler() {
-      if (this.player.head.x === this.grid.x) {
-        this.player.head.x = 0
-      }
-      else if (this.player.head.x < 0) {
-        this.player.head.x = this.grid.x - 1
-      }
-
-      if (this.player.head.y === this.grid.y) {
-        this.player.head.y = 0
-      }
-      else if (this.player.head.y < 0) {
-        this.player.head.y = this.grid.y - 1
-      }
-    },
-    deathHandler() {
-      this.player.head.x = 0
-      this.player.head.y = 0
-      this.player.direction.x = 1
-      this.player.direction.y = 0
-      this.player.body = []
-      this.player.score = 0
-    },
     drawFilledRect(grid) {
       const cellSize = this.cellSize
       this.ctx.fillRect(grid.x * cellSize, grid.y * cellSize, cellSize, cellSize)
@@ -199,10 +114,11 @@ export default {
       this.drawBackground()
       this.drawGrid()
       this.drawPickable()
-      this.drawPlayer()
+      this.drawPlayerBody()
+      this.drawPlayerHead()
     },
     drawBackground() {
-      this.ctx.fillStyle = "black"
+      this.ctx.fillStyle = this.colors.background
       const size = {
         x: this.grid.x * this.cellSize,
         y: this.grid.y * this.cellSize
@@ -212,7 +128,7 @@ export default {
     drawGrid() {
       const cellSize = this.cellSize
 
-      this.ctx.strokeStyle = "gray"
+      this.ctx.strokeStyle = this.colors.gridLines
 
       for (let y = 0; y < this.grid.y; y++) {
         for (let x = 0; x < this.grid.x; x++) {
@@ -223,8 +139,8 @@ export default {
     drawPlayerHead() {
       const cellSize = this.cellSize
       const pos = {
-        x: this.player.head.x * cellSize + cellSize * 0.5,
-        y: this.player.head.y * cellSize + cellSize * 0.5
+        x: this.gameWorld.player.head.x * cellSize + cellSize * 0.5,
+        y: this.gameWorld.player.head.y * cellSize + cellSize * 0.5
       }
       const radius = cellSize * 0.5
 
@@ -233,21 +149,15 @@ export default {
       this.ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2)
       this.ctx.stroke()
     },
-    drawPlayer() {
-      this.ctx.fillStyle = this.player.color
-      for (let i = 0; i < this.player.body.length; i++) {
-        this.drawFilledRect(this.player.body[i])
+    drawPlayerBody() {
+      this.ctx.fillStyle = this.colors.player
+      for (let i = 0; i < this.gameWorld.player.body.length; i++) {
+        this.drawFilledRect(this.gameWorld.player.body[i])
       }
-      this.drawPlayerHead()
     },
     drawPickable() {
-      this.ctx.fillStyle = this.pickable.color
-      this.drawFilledRect(this.pickable.pos)
-    },
-    spawnFood() {
-      // todo: proper random to place pickable only at empty cell
-      this.pickable.pos.x = Math.floor(Math.random() * this.grid.x)
-      this.pickable.pos.y = Math.floor(Math.random() * this.grid.y)
+      this.ctx.fillStyle = this.colors.pickable
+      this.drawFilledRect(this.gameWorld.pickable)
     },
   }
 }
