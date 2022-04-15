@@ -1,5 +1,6 @@
 import Vector2Int from "./math/Vector2Int"
 import Snake from "./Snake"
+import Client from "./Client"
 
 export default class GameWorld {
   /**
@@ -8,38 +9,91 @@ export default class GameWorld {
    * @param {number} gridHeight 
    */
   constructor(gridWidth, gridHeight) {
-    this.player = this.generateLocalSnake()
     this.grid = new Vector2Int(gridWidth, gridHeight)
+    this.snakes = new Map()
+    this.clients = new Map()
     this.pickable = new Vector2Int(5, 5)
-    this.debug = {
-      shouldPlayerGrow: false
+  }
+
+  /**
+   * 
+   * @param {Client} client 
+   */
+  addPlayer(client) {
+    if (this.snakes.size === 2) {
+      throw new Error("more than 2 players are not supported")
     }
+
+    client.id = this.snakes.size.toString()
+    if (this.snakes.size === 0) {
+      this.snakes.set(client.id, this.generateLocalSnake())
+    }
+    else if (this.snakes.size === 1) {
+      this.snakes.set(client.id, this.generateRemoteSnake())
+    }
+
+    this.clients.set(client.id, client)
+
+    this.subscribeToClientEvents(client)
+  }
+
+  /**
+   * 
+   * @param {Client} client 
+   */
+  subscribeToClientEvents(client) {
+    client.eventEmitter.on("extra", () => {
+      this.snakes.get(client.id).debug.shouldPlayerGrow = true
+    })
+    client.eventEmitter.on("direction.up", () => {
+      this.snakes.get(client.id).setDirection(0, -1)
+    })
+    client.eventEmitter.on("direction.down", () => {
+      this.snakes.get(client.id).setDirection(0, 1)
+    })
+    client.eventEmitter.on("direction.left", () => {
+      this.snakes.get(client.id).setDirection(-1, 0)
+    })
+    client.eventEmitter.on("direction.right", () => {
+      this.snakes.get(client.id).setDirection(1, 0)
+    })
   }
 
   tick() {
-    this.player.move(this.grid)
+    this.snakes.forEach((player, id) => {
+      this.tickPlayer(player)
+    })
 
-    const shouldEat = this.player.head.equal(this.pickable)
+    if (this.snakes.size === 2) {
+      // todo: handle collision
+    }
+  }
+
+  tickPlayer(snake) {
+    snake.move(this.grid)
+
+    const shouldEat = snake.head.equal(this.pickable)
 
     if (shouldEat) {
       this.spawnFood()
     }
 
-    const shouldGrow = shouldEat || this.debug.shouldPlayerGrow
+    const shouldGrow = shouldEat || snake.debug.shouldPlayerGrow
 
     if (shouldGrow) {
-      this.player.grow()
+      snake.grow()
     }
     else {
-      this.player.moveBody()
+      snake.moveBody()
     }
 
-    if (this.player.checkSelf()) {
-      this.deathHandler()
+    if (snake.checkSelf()) {
+      // todo
+      console.log("dead")
     }
 
-    if (this.debug.shouldPlayerGrow) {
-      this.debug.shouldPlayerGrow = false
+    if (snake.debug.shouldPlayerGrow) {
+      snake.debug.shouldPlayerGrow = false
     }
   }
 
@@ -49,6 +103,7 @@ export default class GameWorld {
     this.pickable.y = Math.floor(Math.random() * this.grid.y)
   }
 
+  /*
   deathHandler() {
     // this.player.score = 0
     // this.player.head = new Vector2Int(0, 0)
@@ -56,8 +111,17 @@ export default class GameWorld {
     // this.player.body.splice(0, this.player.body.length)
     this.player = this.generateLocalSnake()
   }
+  */
 
   generateLocalSnake() {
-    return new Snake(new Vector2Int(0, 0), new Vector2Int(1, 0))
+    const head = new Vector2Int(0, 0)
+    const snake = new Snake(head, new Vector2Int(1, 0))
+    return snake
+  }
+
+  generateRemoteSnake() {
+    const head = new Vector2Int(this.grid.x - 1, this.grid.y - 1)
+    const snake = new Snake(head, new Vector2Int(-1, 0))
+    return snake
   }
 }

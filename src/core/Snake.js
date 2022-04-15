@@ -11,6 +11,9 @@ export default class Snake {
     this.direction = direction
     this.body = [this.head.copy()]
     this.score = 0
+    this.debug = {
+      shouldPlayerGrow: false
+    }
   }
 
   /**

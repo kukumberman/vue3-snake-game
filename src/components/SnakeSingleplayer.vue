@@ -1,7 +1,5 @@
 <template>
   <div>
-    <h1>Score: {{ gameWorld.player.score }}</h1>
-    <h3>Body: {{ gameWorld.player.body.length }}</h3>
     <h2>Frame count: {{ game.frameCount }}</h2>
     <h2>Delta time: {{ game.deltaTime }}</h2>
   </div>
@@ -10,6 +8,8 @@
 
 <script>
 import GameWorld from "@/core/GameWorld.js"
+import config from "@/core/config.json"
+import Client from "@/core/Client.js"
 
 export default {
   data() {
@@ -30,14 +30,19 @@ export default {
       gameWorld: null,
       colors: {
         pickable: "red",
-        player: "green",
         background: "black",
         gridLines: "gray"
-      }
+      },
+      clients: [
+        new Client(config.inputs[0], { colors: { body: "green" } }),
+        new Client(config.inputs[1], { colors: { body: "orange" } }),
+      ]
     }
   },
   created() {
     this.gameWorld = new GameWorld(this.grid.x, this.grid.y)
+
+    this.clients.forEach(client => this.gameWorld.addPlayer(client))
   },
   mounted() {
     this.ctx = this.$refs.canvas.getContext("2d")
@@ -78,6 +83,12 @@ export default {
         return
       }
 
+      this.clients.forEach(client => {
+        client.handleKeydown(event.code)
+      })
+
+      return
+
       switch (event.code) {
         case "ArrowUp":
           this.setDirection(0, -1)
@@ -114,8 +125,12 @@ export default {
       this.drawBackground()
       this.drawGrid()
       this.drawPickable()
-      this.drawPlayerBody()
-      this.drawPlayerHead()
+
+      this.gameWorld.clients.forEach(client => {
+        const snake = this.gameWorld.snakes.get(client.id)
+        this.drawPlayerBody(client, snake)
+        this.drawPlayerHead(client, snake)
+      })
     },
     drawBackground() {
       this.ctx.fillStyle = this.colors.background
@@ -136,11 +151,11 @@ export default {
         }
       }
     },
-    drawPlayerHead() {
+    drawPlayerHead(client, snake) {
       const cellSize = this.cellSize
       const pos = {
-        x: this.gameWorld.player.head.x * cellSize + cellSize * 0.5,
-        y: this.gameWorld.player.head.y * cellSize + cellSize * 0.5
+        x: snake.head.x * cellSize + cellSize * 0.5,
+        y: snake.head.y * cellSize + cellSize * 0.5
       }
       const radius = cellSize * 0.5
 
@@ -149,10 +164,10 @@ export default {
       this.ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2)
       this.ctx.stroke()
     },
-    drawPlayerBody() {
-      this.ctx.fillStyle = this.colors.player
-      for (let i = 0; i < this.gameWorld.player.body.length; i++) {
-        this.drawFilledRect(this.gameWorld.player.body[i])
+    drawPlayerBody(client, snake) {
+      this.ctx.fillStyle = client.preferences.colors.body
+      for (let i = 0; i < snake.body.length; i++) {
+        this.drawFilledRect(snake.body[i])
       }
     },
     drawPickable() {
