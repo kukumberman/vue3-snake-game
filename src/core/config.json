@@ -1,0 +1,18 @@
+{
+  "inputs": [
+    {
+      "direction.up": "KeyW",
+      "direction.down": "KeyS",
+      "direction.left": "KeyA",
+      "direction.right": "KeyD",
+      "extra": "Space"
+    },
+    {
+      "direction.up": "ArrowUp",
+      "direction.down": "ArrowDown",
+      "direction.left": "ArrowLeft",
+      "direction.right": "ArrowRight",
+      "extra": "Numpad5"
+    }
+  ]
+}
