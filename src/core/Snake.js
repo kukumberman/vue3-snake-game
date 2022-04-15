@@ -1,10 +1,15 @@
 import Vector2Int from "./math/Vector2Int"
 
 export default class Snake {
-  constructor() {
-    this.head = new Vector2Int()
-    this.direction = new Vector2Int()
-    this.body = []
+  /**
+   * 
+   * @param {Vector2Int} head 
+   * @param {Vector2Int} direction 
+   */
+  constructor(head, direction) {
+    this.head = head
+    this.direction = direction
+    this.body = [this.head.copy()]
     this.score = 0
   }
 
@@ -64,6 +69,8 @@ export default class Snake {
    * @param {number} y 
    */
   setDirection(x, y) {
+    // todo: fix minor bug when player sets new direction and immediately changes to opposite of previous dir (if body.length > 2 snake eats yourself)
+    // ! all checks is used to prevent moving in opposite direction
     if (Math.abs(this.direction.x) != Math.abs(x)) {
       this.direction.x = x
     }
