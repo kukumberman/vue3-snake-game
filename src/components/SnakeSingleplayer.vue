@@ -5,9 +5,6 @@
     <h2>Frame count: {{ game.frameCount }}</h2>
     <h2>Delta time: {{ game.deltaTime }}</h2>
   </div>
-  <div>
-    <button @click="game.isPaused = !game.isPaused">Pause</button>
-  </div>
   <canvas ref="canvas" :width="grid.x * cellSize" :height="grid.y * cellSize"></canvas>
 </template>
 
@@ -18,7 +15,6 @@ export default {
       ctx: null,
       game: {
         frameDelay: 250,
-        interval: 0,
         isPaused: false,
         frameCount: 0,
         lastFrameTime: 0,
@@ -58,22 +54,24 @@ export default {
     document.addEventListener("keydown", this.keydownHandler)
 
     this.render()
-
-    // this.draw()
-    // this.game.interval = setInterval(() => {
-    //   this.frame()
-    // }, this.game.frameDelay)
   },
   beforeUnmount() {
     document.removeEventListener("keydown", this.keydownHandler)
-
-    // clearInterval(this.game.interval)
   },
   methods: {
+    renderFrame() {
+      this.tick()
+      this.game.frameCount += 1
+      this.draw()
+    },
     async render() {
       const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
       while (true) {
-        this.frame()
+        this.game.deltaTime = Date.now() - this.game.lastFrameTime
+        if (!this.game.isPaused) {
+          this.renderFrame()
+        }
+        this.game.lastFrameTime = Date.now()
         await sleep(this.game.frameDelay)
       }
     },
@@ -108,18 +106,17 @@ export default {
         case "Space":
           this.game.debugPlayerGrow = true
           break
+        case "KeyP":
+          this.game.isPaused = !this.game.isPaused
+          break
+        case "KeyE":
+          if (this.game.isPaused) {
+            this.renderFrame()
+          }
+          break
         default:
           break
       }
-    },
-    frame() {
-      this.game.deltaTime = Date.now() - this.game.lastFrameTime
-      this.game.lastFrameTime = Date.now()
-      this.game.frameCount += 1
-      if (!this.game.isPaused) {
-        this.tick()
-      }
-      this.draw()
     },
     tick() {
       this.player.head.x += this.player.direction.x
