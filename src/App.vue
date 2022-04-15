@@ -1,16 +1,17 @@
 <template>
-  <!-- <SnakeSingleplayer /> -->
-  <Networking />
+  <SnakeSingleplayer />
+  <!-- <Networking /> -->
 </template>
 
 <script>
 import SnakeSingleplayer from "./components/SnakeSingleplayer.vue"
-import Networking from "./components/Networking.vue"
+// import Networking from "./components/Networking.vue"
 
 export default {
   name: 'App',
   components: {
-    SnakeSingleplayer, Networking
+    SnakeSingleplayer,
+    // Networking
   }
 }
 </script>
