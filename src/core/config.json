@@ -13,6 +13,13 @@
       "direction.left": "ArrowLeft",
       "direction.right": "ArrowRight",
       "extra": "Numpad5"
+    },
+    {
+      "direction.up": ["KeyW", "ArrowUp"],
+      "direction.down": ["KeyS", "ArrowDown"],
+      "direction.left": ["KeyA", "ArrowLeft"],
+      "direction.right": ["KeyD", "ArrowRight"],
+      "extra": ["Space", "Numpad5"]
     }
   ]
 }
