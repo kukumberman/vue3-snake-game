@@ -1,18 +1,44 @@
+import EventEmitter from "events"
 import Vector2Int from "./math/Vector2Int"
 import Snake from "./Snake"
 import Client from "./Client"
+import { sleep } from "./utils"
 
 export default class GameWorld {
   /**
    * 
    * @param {number} gridWidth 
    * @param {number} gridHeight 
+   * @param {number} frameDelay
    */
-  constructor(gridWidth, gridHeight) {
+  constructor(gridWidth, gridHeight, frameDelay) {
     this.grid = new Vector2Int(gridWidth, gridHeight)
+    this.frameDelay = frameDelay
     this.snakes = new Map()
     this.clients = new Map()
     this.pickable = new Vector2Int(5, 5)
+    this.events = new EventEmitter()
+    this.frameCount = 0
+    this.deltaTime = 0
+    this.lastFrameTime = 0
+    this.isPaused = false
+  }
+
+  async start() {
+    while (true) {
+      this.deltaTime = Date.now() - this.lastFrameTime
+      if (!this.isPaused) {
+        this.update()
+      }
+      this.lastFrameTime = Date.now()
+      await sleep(this.frameDelay)
+    }
+  }
+
+  update() {
+    this.tick()
+    this.frameCount += 1
+    this.events.emit("update")
   }
 
   /**
@@ -42,34 +68,40 @@ export default class GameWorld {
    * @param {Client} client 
    */
   subscribeToClientEvents(client) {
-    client.eventEmitter.on("extra", () => {
+    client.events.on("extra", () => {
       this.snakes.get(client.id).debug.shouldPlayerGrow = true
     })
-    client.eventEmitter.on("direction.up", () => {
+    client.events.on("direction.up", () => {
       this.snakes.get(client.id).setDirection(0, -1)
     })
-    client.eventEmitter.on("direction.down", () => {
+    client.events.on("direction.down", () => {
       this.snakes.get(client.id).setDirection(0, 1)
     })
-    client.eventEmitter.on("direction.left", () => {
+    client.events.on("direction.left", () => {
       this.snakes.get(client.id).setDirection(-1, 0)
     })
-    client.eventEmitter.on("direction.right", () => {
+    client.events.on("direction.right", () => {
       this.snakes.get(client.id).setDirection(1, 0)
     })
   }
 
   tick() {
-    this.snakes.forEach((player, id) => {
-      this.tickPlayer(player)
+    this.clients.forEach(client => {
+      this.tickPlayer(client)
     })
 
     if (this.snakes.size === 2) {
-      // todo: handle collision
+      this.collisionHandler()
     }
   }
 
-  tickPlayer(snake) {
+  /**
+   * 
+   * @param {Client} client 
+   */
+  tickPlayer(client) {
+    const snake = this.snakes.get(client.id)
+
     snake.move(this.grid)
 
     const shouldEat = snake.head.equal(this.pickable)
@@ -88,8 +120,9 @@ export default class GameWorld {
     }
 
     if (snake.checkSelf()) {
-      // todo
-      console.log("dead")
+      this.events.emit("snakeCollision.self", { 
+        loser: client.id
+      })
     }
 
     if (snake.debug.shouldPlayerGrow) {
@@ -103,15 +136,26 @@ export default class GameWorld {
     this.pickable.y = Math.floor(Math.random() * this.grid.y)
   }
 
-  /*
-  deathHandler() {
-    // this.player.score = 0
-    // this.player.head = new Vector2Int(0, 0)
-    // this.player.direction = new Vector2Int(1, 0)
-    // this.player.body.splice(0, this.player.body.length)
-    this.player = this.generateLocalSnake()
+  collisionHandler() {
+    const clients = Array.from(this.clients.keys())
+
+    const firstCollidesWithSecond = this.snakes.get(clients[0]).collidesWith(this.snakes.get(clients[1]))
+    const secondCollidesWithFirst = this.snakes.get(clients[1]).collidesWith(this.snakes.get(clients[0]))
+
+    if (firstCollidesWithSecond && secondCollidesWithFirst) {
+      this.events.emit("snakeCollision.both")
+    }
+    else if (firstCollidesWithSecond) {
+      this.events.emit("snakeCollision.other", {
+        winner: clients[1]
+      })
+    }
+    else if (secondCollidesWithFirst) {
+      this.events.emit("snakeCollision.other", {
+        winner: clients[0]
+      })
+    }
   }
-  */
 
   generateLocalSnake() {
     const head = new Vector2Int(0, 0)

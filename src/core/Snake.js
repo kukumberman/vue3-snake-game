@@ -68,6 +68,20 @@ export default class Snake {
 
   /**
    * 
+   * @param {Snake} other 
+   * @returns 
+   */
+  collidesWith(other) {
+    for (let i = 0; i < other.body.length; i++) {
+      if (this.head.equal(other.body[i])) {
+        return true
+      }
+    }
+    return false
+  }
+
+  /**
+   * 
    * @param {number} x 
    * @param {number} y 
    */
