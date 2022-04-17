@@ -1,30 +1,28 @@
 <template>
   <div>
-    <h2>Frame count: {{ game.frameCount }}</h2>
-    <h2>Delta time: {{ game.deltaTime }}</h2>
+    <h2>Frame count: {{ gameWorld.frameCount }}</h2>
+    <h2>Delta time: {{ gameWorld.deltaTime }}</h2>
   </div>
-  <canvas ref="canvas" :width="grid.x * cellSize" :height="grid.y * cellSize"></canvas>
+  <canvas ref="canvas" :width="canvasWidth" :height="canvasHeight"></canvas>
 </template>
 
 <script>
 import GameWorld from "@/core/GameWorld.js"
-import config from "@/core/config.json"
-import Client from "@/core/Client.js"
 
 export default {
+  props: {
+    clients: {
+      type: Array,
+      require: true
+    }
+  },
   data() {
     return {
       ctx: null,
-      game: {
-        frameDelay: 250,
-        isPaused: false,
-        frameCount: 0,
-        lastFrameTime: 0,
-        deltaTime: 0,
-      },
+      frameDelay: 250,
       cellSize: 50,
       grid: {
-        x: 10,
+        x: 15,
         y: 10
       },
       gameWorld: null,
@@ -33,14 +31,10 @@ export default {
         background: "black",
         gridLines: "gray"
       },
-      clients: [
-        new Client(config.inputs[0], { colors: { body: "green" } }),
-        new Client(config.inputs[1], { colors: { body: "orange" } }),
-      ]
     }
   },
   created() {
-    this.gameWorld = new GameWorld(this.grid.x, this.grid.y)
+    this.gameWorld = new GameWorld(this.grid.x, this.grid.y, this.frameDelay)
 
     this.clients.forEach(client => this.gameWorld.addPlayer(client))
   },
@@ -48,69 +42,62 @@ export default {
     this.ctx = this.$refs.canvas.getContext("2d")
 
     document.addEventListener("keydown", this.keydownHandler)
+    this.subscribeToGameWorldEvents()
 
-    this.render()
+    this.gameWorld.start()
   },
   beforeUnmount() {
     document.removeEventListener("keydown", this.keydownHandler)
+    this.unsubscribeFromGameWorldEvents()
   },
   methods: {
-    renderFrame() {
-      this.gameWorld.tick()
-      this.game.frameCount += 1
+    subscribeToGameWorldEvents() {
+      this.gameWorld.events.on("update", this.onUpdate)
+      this.gameWorld.events.on("snakeCollision.other", this.onSnakeCollisionWithOther)
+      this.gameWorld.events.on("snakeCollision.both", this.onSnakeCollisionBoth)
+      this.gameWorld.events.on("snakeCollision.self", this.onSnakeSelfCollision)
+    },
+    unsubscribeFromGameWorldEvents() {
+      this.gameWorld.events.off("update", this.onUpdate)
+      this.gameWorld.events.off("snakeCollision.other", this.onSnakeCollisionWithOther)
+      this.gameWorld.events.off("snakeCollision.both", this.onSnakeCollisionBoth)
+      this.gameWorld.events.off("snakeCollision.self", this.onSnakeSelfCollision)
+    },
+    onUpdate() {
       this.draw()
     },
-    async render() {
-      const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
-
-      this.draw()
-      await sleep(this.game.frameDelay)
-
-      while (true) {
-        this.game.deltaTime = Date.now() - this.game.lastFrameTime
-        if (!this.game.isPaused) {
-          this.renderFrame()
-        }
-        this.game.lastFrameTime = Date.now()
-        await sleep(this.game.frameDelay)
-      }
+    onSnakeCollisionWithOther(args) {
+      const { winner } = args
+      const client = this.gameWorld.clients.get(winner)
+      this.gameWorld.isPaused = true
+      alert(`Snake "${client.name}" wins!`)
     },
-    setDirection(x, y) {
-      this.gameWorld.player.setDirection(x, y)
+    onSnakeCollisionBoth() {
+      this.gameWorld.isPaused = true
+      alert(`Both snakes ate each other!`)
+    },
+    onSnakeSelfCollision(args) {
+      const { loser } = args
+      const client = this.gameWorld.clients.get(loser)
+      this.gameWorld.isPaused = true
+      alert(`Snake "${client.name}" eats yourself!`)
     },
     keydownHandler(event) {
       if (event.repeat) {
         return
       }
 
-      this.clients.forEach(client => {
+      this.gameWorld.clients.forEach(client => {
         client.handleKeydown(event.code)
       })
 
-      return
-
       switch (event.code) {
-        case "ArrowUp":
-          this.setDirection(0, -1)
-          break
-        case "ArrowDown":
-          this.setDirection(0, 1)
-          break
-        case "ArrowLeft":
-          this.setDirection(-1, 0)
-          break
-        case "ArrowRight":
-          this.setDirection(1, 0)
-          break
-        case "Space":
-          this.gameWorld.debug.shouldPlayerGrow = true
-          break
         case "KeyP":
-          this.game.isPaused = !this.game.isPaused
+          this.gameWorld.isPaused = !this.gameWorld.isPaused
           break
         case "KeyE":
-          if (this.game.isPaused) {
-            this.renderFrame()
+          if (this.gameWorld.isPaused) {
+            this.gameWorld.update()
           }
           break
         default:
@@ -135,8 +122,8 @@ export default {
     drawBackground() {
       this.ctx.fillStyle = this.colors.background
       const size = {
-        x: this.grid.x * this.cellSize,
-        y: this.grid.y * this.cellSize
+        x: this.gameWorld.grid.x * this.cellSize,
+        y: this.gameWorld.grid.y * this.cellSize
       }
       this.ctx.fillRect(0, 0, size.x, size.y)
     },
@@ -165,7 +152,7 @@ export default {
       this.ctx.stroke()
     },
     drawPlayerBody(client, snake) {
-      this.ctx.fillStyle = client.preferences.colors.body
+      this.ctx.fillStyle = client.name
       for (let i = 0; i < snake.body.length; i++) {
         this.drawFilledRect(snake.body[i])
       }
@@ -174,6 +161,14 @@ export default {
       this.ctx.fillStyle = this.colors.pickable
       this.drawFilledRect(this.gameWorld.pickable)
     },
+  },
+  computed: {
+    canvasWidth() {
+      return this.gameWorld.grid.x * this.cellSize
+    },
+    canvasHeight() {
+      return this.gameWorld.grid.y * this.cellSize
+    }
   }
 }
 </script>
